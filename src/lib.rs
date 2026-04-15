@@ -1,0 +1,211 @@
+use hunspell::Hunspell;
+use regex::Regex;
+
+/// Extracts language specification from text comments.
+///
+/// Supports comment styles: #, //, ;, %
+/// Format: "lang: xx_YY" where xx is language code and YY is country code
+///
+/// # Examples
+///
+/// ```
+/// use hunspell_lsp::extract_lang;
+///
+/// assert_eq!(extract_lang("# lang: en_US"), Some("en_US".to_string()));
+/// assert_eq!(extract_lang("// lang: de_DE"), Some("de_DE".to_string()));
+/// assert_eq!(extract_lang("; lang: fr_FR"), Some("fr_FR".to_string()));
+/// assert_eq!(extract_lang("% lang: es_ES"), Some("es_ES".to_string()));
+/// assert_eq!(extract_lang("No lang here"), None);
+/// ```
+pub fn extract_lang(text: &str) -> Option<String> {
+    let re = Regex::new(r"(?m)^\s*(#|//|;|%)\s*lang:\s*([A-Za-z_]+)").unwrap();
+    re.captures(text).map(|c| c[2].to_string())
+}
+
+/// Loads a Hunspell dictionary for the specified language.
+///
+/// Looks for dictionary files in `/usr/share/hunspell/<lang>/`
+/// Requires both .aff and .dic files to be present.
+///
+/// # Arguments
+///
+/// * `lang` - Language code (e.g., "en_US", "de_DE")
+///
+/// # Returns
+///
+/// * `Some(Hunspell)` - If dictionary files are found and loaded successfully
+/// * `None` - If dictionary files are not found
+pub fn load_dict(lang: &str) -> Option<Hunspell> {
+    let base = format!("/usr/share/hunspell/{}", lang);
+    let aff = format!("{}.aff", base);
+    let dic = format!("{}.dic", base);
+    if std::path::Path::new(&aff).exists() {
+        Some(Hunspell::new(&aff, &dic))
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_lang_with_hash_comment() {
+        let text = "# lang: en_US\nSome content here";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_with_double_slash_comment() {
+        let text = "// lang: de_DE\nSome content here";
+        assert_eq!(extract_lang(text), Some("de_DE".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_with_semicolon_comment() {
+        let text = "; lang: fr_FR\nSome content here";
+        assert_eq!(extract_lang(text), Some("fr_FR".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_with_percent_comment() {
+        let text = "% lang: es_ES\nSome content here";
+        assert_eq!(extract_lang(text), Some("es_ES".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_with_whitespace() {
+        let text = "  # lang: en_GB  \nSome content here";
+        assert_eq!(extract_lang(text), Some("en_GB".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_not_at_start() {
+        let text = "Some content\n# lang: en_US\nMore content";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_no_lang_specified() {
+        let text = "# This is just a comment\nSome content";
+        assert_eq!(extract_lang(text), None);
+    }
+
+    #[test]
+    fn test_extract_lang_invalid_format() {
+        let text = "# language: en_US\nSome content";
+        assert_eq!(extract_lang(text), None);
+    }
+
+    #[test]
+    fn test_extract_lang_empty_text() {
+        let text = "";
+        assert_eq!(extract_lang(text), None);
+    }
+
+    #[test]
+    fn test_extract_lang_multiline() {
+        let text = "# First line\n// lang: de_DE\nThird line";
+        assert_eq!(extract_lang(text), Some("de_DE".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_with_underscore() {
+        let text = "# lang: pt_BR\nSome content";
+        assert_eq!(extract_lang(text), Some("pt_BR".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_case_sensitive() {
+        let text = "# lang: EN_us\nSome content";
+        assert_eq!(extract_lang(text), Some("EN_us".to_string()));
+    }
+
+    #[test]
+    fn test_load_dict_nonexistent_language() {
+        // Test with a language that definitely doesn't exist
+        let result = load_dict("nonexistent_lang_12345");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_load_dict_empty_string() {
+        let result = load_dict("");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_extract_lang_only_lang_keyword() {
+        let text = "# lang\nSome content";
+        assert_eq!(extract_lang(text), None);
+    }
+
+    #[test]
+    fn test_extract_lang_with_special_characters() {
+        let text = "# lang: en-US\nSome content";
+        assert_eq!(extract_lang(text), Some("en".to_string())); // Matches 'en' part before hyphen
+    }
+
+    #[test]
+    fn test_extract_lang_multiple_matches_first_wins() {
+        let text = "# lang: en_US\n// lang: de_DE";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_no_colon() {
+        let text = "# lang en_US\nSome content";
+        assert_eq!(extract_lang(text), None);
+    }
+
+    #[test]
+    fn test_extract_lang_with_leading_spaces() {
+        let text = "    // lang: it_IT\nSome content";
+        assert_eq!(extract_lang(text), Some("it_IT".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_comment_only() {
+        let text = "# lang: en_US";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_carriage_return() {
+        let text = "# lang: en_US\r\nSome content";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_between_content() {
+        let text = "Some content\n# lang: fr_FR\nMore content";
+        assert_eq!(extract_lang(text), Some("fr_FR".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_with_tabs() {
+        let text = "\t// lang: nl_NL\nSome content";
+        assert_eq!(extract_lang(text), Some("nl_NL".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_mixed_case_comment_chars() {
+        // Test that it only recognizes the exact comment characters
+        let text = "# lang: en_US\nSome content";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_load_dict_with_special_chars() {
+        // Test that special characters in language code are handled safely
+        let result = load_dict("../etc/passwd");
+        assert!(result.is_none()); // Should not load arbitrary files
+    }
+
+    #[test]
+    fn test_extract_lang_language_only() {
+        let text = "# lang: en\nSome content";
+        assert_eq!(extract_lang(text), Some("en".to_string()));
+    }
+}

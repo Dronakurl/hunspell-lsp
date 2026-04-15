@@ -1,0 +1,19 @@
+[package]
+name = "hunspell-lsp"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "hunspell_lsp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "hunspell-lsp"
+path = "src/main.rs"
+
+[dependencies]
+lsp-server = "*"
+lsp-types = "*"
+hunspell = "*"
+regex = "*"
+serde_json = "*"
