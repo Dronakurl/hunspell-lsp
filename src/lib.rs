@@ -1,14 +1,15 @@
 use hunspell::Hunspell;
 use regex::Regex;
 
-/// Extracts language specification from text comments.
+/// Extracts language specification from text comments or plain text.
 ///
-/// Supports comment styles:
+/// Supports multiple formats:
 /// - HTML comments for Markdown: <!-- lang: xx_YY -->
 /// - Shell-style: # lang: xx_YY
 /// - C-style: // lang: xx_YY
 /// - INI-style: ; lang: xx_YY
 /// - LaTeX/TeX-style: % lang: xx_YY
+/// - Plain text anywhere: lang: xx_YY
 ///
 /// Format: "lang: xx_YY" where xx is language code and YY is country code
 ///
@@ -24,19 +25,22 @@ use regex::Regex;
 /// assert_eq!(extract_lang("// lang: de_DE"), Some("de_DE".to_string()));
 /// assert_eq!(extract_lang("; lang: fr_FR"), Some("fr_FR".to_string()));
 /// assert_eq!(extract_lang("% lang: es_ES"), Some("es_ES".to_string()));
+/// assert_eq!(extract_lang("Some text lang: en_US here"), Some("en_US".to_string()));
 /// assert_eq!(extract_lang("No lang here"), None);
 /// ```
 pub fn extract_lang(text: &str) -> Option<String> {
-    // Combined regex that matches all comment styles
-    // This ensures we find the FIRST lang: specification regardless of comment style
-    let re = Regex::new(r"(?mi)(<!--\s*lang:\s*([A-Za-z_]+)\s*-->|^\s*(#|//|;|%)\s*lang:\s*([A-Za-z_]+))").unwrap();
+    // Combined regex that matches all comment styles and plain text
+    // This ensures we find the FIRST lang: specification regardless of format
+    let re = Regex::new(r"(?mi)(<!--\s*lang:\s*([A-Za-z_]+)\s*-->|^\s*(#|//|;|%)\s*lang:\s*([A-Za-z_]+)|lang:\s*([A-Za-z_]+))").unwrap();
 
     if let Some(caps) = re.captures(text) {
-        // The regex has two groups: one for HTML comments (group 2) and one for other comments (group 4)
+        // The regex has multiple groups: HTML comments (group 2), other comments (group 4), plain text (group 5)
         if let Some(html_lang) = caps.get(2) {
             return Some(html_lang.as_str().to_string());
         } else if let Some(other_lang) = caps.get(4) {
             return Some(other_lang.as_str().to_string());
+        } else if let Some(plain_lang) = caps.get(5) {
+            return Some(plain_lang.as_str().to_string());
         }
     }
 
@@ -267,6 +271,42 @@ mod tests {
     fn test_extract_lang_language_only() {
         let text = "# lang: en\nSome content";
         assert_eq!(extract_lang(text), Some("en".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_plain_text_in_sentence() {
+        let text = "Some text lang: en_US here";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_plain_text_at_start() {
+        let text = "lang: de_DE Some content here";
+        assert_eq!(extract_lang(text), Some("de_DE".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_plain_text_middle() {
+        let text = "This is lang: fr_FR in the middle";
+        assert_eq!(extract_lang(text), Some("fr_FR".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_plain_text_end() {
+        let text = "Some content here lang: es_ES";
+        assert_eq!(extract_lang(text), Some("es_ES".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_comment_before_plain() {
+        let text = "# lang: en_US\nSome text lang: de_DE";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_plain_before_comment() {
+        let text = "lang: en_US\n# lang: de_DE";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
     }
 
     #[test]
