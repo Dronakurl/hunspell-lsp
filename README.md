@@ -55,15 +55,20 @@ The LSP server communicates via stdin/stdout. To use it, you need to configure y
 
 ### Language Specification
 
-Specify the language for spell checking by adding a special comment at the beginning of your document:
+Specify the language for spell checking by adding a `lang:` pattern anywhere in your document:
 
-Supported comment formats:
+**Supported formats:**
+- **Plain text**: `lang: en_US` (works anywhere in the document)
 - `# lang: en_US` (shell-style)
 - `// lang: en_US` (C-style)
+- `<!-- lang: en_US -->` (HTML/Markdown)
 - `; lang: en_US` (INI-style)
 - `% lang: en_US` (LaTeX/TeX-style)
 
-If no language is specified, it defaults to `en_US`.
+**Rules:**
+- The first `lang:` pattern in the document is used
+- Language can be specified in comments or plain text
+- If no language is specified, it defaults to `en_US`
 
 ### Example
 
