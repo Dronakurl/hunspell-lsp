@@ -82,17 +82,27 @@ def hello_world():
 
 ### Code Actions
 
-The LSP server provides automatic correction suggestions:
+The LSP server provides intelligent correction suggestions:
 
-1. **Misspelled words are highlighted** with yellow warnings
-2. **Hover over the word** to see Hunspell suggestions
-3. **Apply quick fixes** to automatically replace misspelled words with suggestions
-4. **Multiple suggestions** are provided when available
+**Smart Code Action Behavior:**
+- **Cursor on misspelled word** → Shows corrections for that word only
+- **Cursor elsewhere on line** → Shows corrections for all misspelled words in the line
+- **Severity** → Hints (not warnings) for less intrusive editing
+
+**How it works:**
+1. Misspelled words are highlighted with hints
+2. Hover over the word to see Hunspell suggestions
+3. Apply quick fixes to automatically replace misspelled words
+4. Multiple suggestions provided when available
 
 Example diagnostic message:
 ```
 Possibly misspelled: dksadf. Suggestions: does, dad, sad, dads
 ```
+
+**Code Action Examples:**
+- On word: "Replace 'dksadf' with 'does'"
+- On line: "Replace 'ihc' (2:13): with 'ich'"
 
 For a JavaScript file:
 ```javascript

@@ -58,40 +58,91 @@ fn main() {
                     let mut code_actions = vec![];
 
                     if let Some(doc_state) = documents.get(&uri) {
-                        // Only provide code actions for diagnostics that intersect with the requested range
-                        for (diag_id, spell_data) in &doc_state.diagnostics {
-                            // Check if this diagnostic intersects with the requested range
+                        // Get the cursor line number
+                        let cursor_line = params.range.start.line;
+
+                        // Check if cursor is on a misspelled word
+                        let mut cursor_on_misspelled = false;
+                        for (_diag_id, spell_data) in &doc_state.diagnostics {
                             let ranges_intersect = spell_data.range.start.line <= params.range.end.line
                                 && spell_data.range.end.line >= params.range.start.line
                                 && spell_data.range.start.character <= params.range.end.character
                                 && spell_data.range.end.character >= params.range.start.character;
 
                             if ranges_intersect {
-                                // Create code actions for each suggestion
-                                for suggestion in &spell_data.suggestions {
-                                    let action = CodeAction {
-                                        title: format!("Replace with '{}'", suggestion),
-                                        kind: Some(CodeActionKind::QUICKFIX),
-                                        diagnostics: None,
-                                        edit: Some(WorkspaceEdit {
-                                            changes: Some(vec![(
-                                                params.text_document.uri.clone(),
-                                                vec![TextEdit {
-                                                    range: spell_data.range.clone(),
-                                                    new_text: suggestion.clone(),
-                                                }],
-                                            )]
-                                            .into_iter()
-                                            .collect()),
-                                            document_changes: None,
-                                            change_annotations: None,
-                                        }),
-                                        command: None,
-                                        is_preferred: None,
-                                        disabled: None,
-                                        data: Some(serde_json::to_value(diag_id).unwrap()),
-                                    };
-                                    code_actions.push(action);
+                                cursor_on_misspelled = true;
+                                break;
+                            }
+                        }
+
+                        if cursor_on_misspelled {
+                            // Cursor is on a misspelled word - only show suggestions for this word
+                            for (diag_id, spell_data) in &doc_state.diagnostics {
+                                let ranges_intersect = spell_data.range.start.line <= params.range.end.line
+                                    && spell_data.range.end.line >= params.range.start.line
+                                    && spell_data.range.start.character <= params.range.end.character
+                                    && spell_data.range.end.character >= params.range.start.character;
+
+                                if ranges_intersect {
+                                    // Create code actions for each suggestion
+                                    for suggestion in &spell_data.suggestions {
+                                        let action = CodeAction {
+                                            title: format!("Replace '{}' with '{}'", spell_data.word, suggestion),
+                                            kind: Some(CodeActionKind::QUICKFIX),
+                                            diagnostics: None,
+                                            edit: Some(WorkspaceEdit {
+                                                changes: Some(vec![(
+                                                    params.text_document.uri.clone(),
+                                                    vec![TextEdit {
+                                                        range: spell_data.range.clone(),
+                                                        new_text: suggestion.clone(),
+                                                    }],
+                                                )]
+                                                .into_iter()
+                                                .collect()),
+                                                document_changes: None,
+                                                change_annotations: None,
+                                            }),
+                                            command: None,
+                                            is_preferred: None,
+                                            disabled: None,
+                                            data: Some(serde_json::to_value(diag_id).unwrap()),
+                                        };
+                                        code_actions.push(action);
+                                    }
+                                }
+                            }
+                        } else {
+                            // Cursor is not on a misspelled word - show all misspelled words in the line
+                            for (diag_id, spell_data) in &doc_state.diagnostics {
+                                // Only include diagnostics on the same line as the cursor
+                                if spell_data.range.start.line == cursor_line {
+                                    // Create code actions for each suggestion
+                                    for suggestion in &spell_data.suggestions {
+                                        let action = CodeAction {
+                                            title: format!("Replace '{}' ({}:{}): with '{}'", spell_data.word, spell_data.range.start.line + 1, spell_data.range.start.character + 1, suggestion),
+                                            kind: Some(CodeActionKind::QUICKFIX),
+                                            diagnostics: None,
+                                            edit: Some(WorkspaceEdit {
+                                                changes: Some(vec![(
+                                                    params.text_document.uri.clone(),
+                                                    vec![TextEdit {
+                                                        range: spell_data.range.clone(),
+                                                        new_text: suggestion.clone(),
+                                                    }],
+                                                )]
+                                                .into_iter()
+                                                .collect()),
+                                                document_changes: None,
+                                                change_annotations: None,
+                                            }),
+                                            command: None,
+                                            is_preferred: None,
+                                            disabled: None,
+                                            data: Some(serde_json::to_value(diag_id).unwrap()),
+                                        };
+                                        code_actions.push(action);
+                                    }
                                 }
                             }
                         }
@@ -191,7 +242,7 @@ fn main() {
                                                 character: word_end as u32,
                                             },
                                         },
-                                        severity: Some(DiagnosticSeverity::WARNING),
+                                        severity: Some(DiagnosticSeverity::HINT),
                                         message,
                                         data: Some(serde_json::to_value(diag_id).unwrap()),
                                         ..Default::default()

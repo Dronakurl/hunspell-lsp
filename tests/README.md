@@ -12,6 +12,12 @@ Basic German spell checking test with several misspelled words:
 - `progammierung` (should be "Programmierung")
 - `comuter` (should be "Computer")
 
+### `test_smart_code_actions.md`
+Demonstrates smart code action behavior:
+- Cursor on misspelled word → shows corrections for that word only
+- Cursor elsewhere on line → shows corrections for all misspelled words in line
+- Tests multiple errors: "ihc", "Kanl", "progammierung", "comuter", "dksadf"
+
 ### `test_multiple_errors_same_line.md`
 Tests multiple misspellings in a single line to verify cursor-position-based code actions.
 
