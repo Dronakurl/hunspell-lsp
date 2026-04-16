@@ -10,6 +10,7 @@ struct SpellCheckerData {
     uri: String,
     word: String,
     suggestions: Vec<String>,
+    range: Range,
 }
 
 struct DocumentState {
@@ -68,7 +69,7 @@ fn main() {
                                         changes: Some(vec![(
                                             params.text_document.uri.clone(),
                                             vec![TextEdit {
-                                                range: params.range,
+                                                range: spell_data.range.clone(),
                                                 new_text: suggestion.clone(),
                                             }],
                                         )]
@@ -150,6 +151,16 @@ fn main() {
                                         uri: uri.clone(),
                                         word: clean.to_string(),
                                         suggestions: suggestions.clone(),
+                                        range: Range {
+                                            start: Position {
+                                                line: line_idx as u32,
+                                                character: word_start as u32,
+                                            },
+                                            end: Position {
+                                                line: line_idx as u32,
+                                                character: word_end as u32,
+                                            },
+                                        },
                                     };
 
                                     doc_state.diagnostics.insert(diag_id.clone(), spell_data);
