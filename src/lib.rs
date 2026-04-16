@@ -3,23 +3,44 @@ use regex::Regex;
 
 /// Extracts language specification from text comments.
 ///
-/// Supports comment styles: #, //, ;, %
+/// Supports comment styles:
+/// - HTML comments for Markdown: <!-- lang: xx_YY -->
+/// - Shell-style: # lang: xx_YY
+/// - C-style: // lang: xx_YY
+/// - INI-style: ; lang: xx_YY
+/// - LaTeX/TeX-style: % lang: xx_YY
+///
 /// Format: "lang: xx_YY" where xx is language code and YY is country code
+///
+/// Note: If multiple lang: specifications exist, the first one in the document is used.
 ///
 /// # Examples
 ///
 /// ```
 /// use hunspell_lsp::extract_lang;
 ///
-/// assert_eq!(extract_lang("# lang: en_US"), Some("en_US".to_string()));
+/// assert_eq!(extract_lang("<!-- lang: en_US -->"), Some("en_US".to_string()));
+/// assert_eq!(extract_lang("# lang: de_DE"), Some("de_DE".to_string()));
 /// assert_eq!(extract_lang("// lang: de_DE"), Some("de_DE".to_string()));
 /// assert_eq!(extract_lang("; lang: fr_FR"), Some("fr_FR".to_string()));
 /// assert_eq!(extract_lang("% lang: es_ES"), Some("es_ES".to_string()));
 /// assert_eq!(extract_lang("No lang here"), None);
 /// ```
 pub fn extract_lang(text: &str) -> Option<String> {
-    let re = Regex::new(r"(?m)^\s*(#|//|;|%)\s*lang:\s*([A-Za-z_]+)").unwrap();
-    re.captures(text).map(|c| c[2].to_string())
+    // Combined regex that matches all comment styles
+    // This ensures we find the FIRST lang: specification regardless of comment style
+    let re = Regex::new(r"(?mi)(<!--\s*lang:\s*([A-Za-z_]+)\s*-->|^\s*(#|//|;|%)\s*lang:\s*([A-Za-z_]+))").unwrap();
+
+    if let Some(caps) = re.captures(text) {
+        // The regex has two groups: one for HTML comments (group 2) and one for other comments (group 4)
+        if let Some(html_lang) = caps.get(2) {
+            return Some(html_lang.as_str().to_string());
+        } else if let Some(other_lang) = caps.get(4) {
+            return Some(other_lang.as_str().to_string());
+        }
+    }
+
+    None
 }
 
 /// Loads a Hunspell dictionary for the specified language.
@@ -51,8 +72,47 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_extract_lang_with_html_comment() {
+        let text = "<!-- lang: en_US -->\nSome content here";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_with_html_comment_case_insensitive() {
+        let text = "<!-- LANG: EN_US -->\nSome content here";
+        assert_eq!(extract_lang(text), Some("EN_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_with_html_comment_with_spaces() {
+        let text = "<!--  lang:  de_DE  -->\nSome content here";
+        assert_eq!(extract_lang(text), Some("de_DE".to_string()));
+    }
+
+    #[test]
     fn test_extract_lang_with_hash_comment() {
         let text = "# lang: en_US\nSome content here";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_html_comment_priority_over_hash() {
+        let text = "<!-- lang: en_US -->\n# lang: de_DE\nSome content";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_markdown_heading_not_recognized() {
+        // In Markdown, # at start of line is a heading, not a comment
+        // So "# lang: en_US" in a heading should NOT be recognized as language spec
+        let text = "# lang: en_US\nThis is a heading, not a comment";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_hash_comment_with_leading_space() {
+        // When # is preceded by spaces, it's more likely to be a comment
+        let text = " # lang: en_US\nSome content here";
         assert_eq!(extract_lang(text), Some("en_US".to_string()));
     }
 
@@ -207,5 +267,29 @@ mod tests {
     fn test_extract_lang_language_only() {
         let text = "# lang: en\nSome content";
         assert_eq!(extract_lang(text), Some("en".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_multiple_html_comments_first_wins() {
+        let text = "<!-- lang: en_US -->\nSome content\n<!-- lang: de_DE -->";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_multiple_hash_comments_first_wins() {
+        let text = "# lang: en_US\nSome content\n# lang: de_DE";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_mixed_comment_styles_first_wins() {
+        let text = "# lang: en_US\nSome content\n<!-- lang: de_DE -->";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+
+    #[test]
+    fn test_extract_lang_html_before_hash() {
+        let text = "<!-- lang: en_US -->\n# lang: de_DE\nSome content";
+        assert_eq!(extract_lang(text), Some("en_US".to_string()));
     }
 }

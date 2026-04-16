@@ -17,3 +17,4 @@ lsp-types = "*"
 hunspell = "*"
 regex = "*"
 serde_json = "*"
+serde = { version = "*", features = ["derive"] }

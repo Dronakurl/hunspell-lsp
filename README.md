@@ -8,6 +8,7 @@ A Language Server Protocol (LSP) implementation that provides spell checking usi
 - Support for multiple languages through Hunspell dictionaries
 - Language specification via special comments in documents
 - Full synchronization with text changes
+- **Code Actions**: Automatic correction suggestions with quick-fix actions
 
 ## Building
 
@@ -72,6 +73,20 @@ For a Python file:
 
 def hello_world():
     print("Hello World")  # Any misspellings will be highlighted
+```
+
+### Code Actions
+
+The LSP server provides automatic correction suggestions:
+
+1. **Misspelled words are highlighted** with yellow warnings
+2. **Hover over the word** to see Hunspell suggestions
+3. **Apply quick fixes** to automatically replace misspelled words with suggestions
+4. **Multiple suggestions** are provided when available
+
+Example diagnostic message:
+```
+Possibly misspelled: dksadf. Suggestions: does, dad, sad, dads
 ```
 
 For a JavaScript file:
