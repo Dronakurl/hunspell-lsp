@@ -58,32 +58,41 @@ fn main() {
                     let mut code_actions = vec![];
 
                     if let Some(doc_state) = documents.get(&uri) {
+                        // Only provide code actions for diagnostics that intersect with the requested range
                         for (diag_id, spell_data) in &doc_state.diagnostics {
-                            // Create code actions for each suggestion
-                            for suggestion in &spell_data.suggestions {
-                                let action = CodeAction {
-                                    title: format!("Replace with '{}'", suggestion),
-                                    kind: Some(CodeActionKind::QUICKFIX),
-                                    diagnostics: None,
-                                    edit: Some(WorkspaceEdit {
-                                        changes: Some(vec![(
-                                            params.text_document.uri.clone(),
-                                            vec![TextEdit {
-                                                range: spell_data.range.clone(),
-                                                new_text: suggestion.clone(),
-                                            }],
-                                        )]
-                                        .into_iter()
-                                        .collect()),
-                                        document_changes: None,
-                                        change_annotations: None,
-                                    }),
-                                    command: None,
-                                    is_preferred: None,
-                                    disabled: None,
-                                    data: Some(serde_json::to_value(diag_id).unwrap()),
-                                };
-                                code_actions.push(action);
+                            // Check if this diagnostic intersects with the requested range
+                            let ranges_intersect = spell_data.range.start.line <= params.range.end.line
+                                && spell_data.range.end.line >= params.range.start.line
+                                && spell_data.range.start.character <= params.range.end.character
+                                && spell_data.range.end.character >= params.range.start.character;
+
+                            if ranges_intersect {
+                                // Create code actions for each suggestion
+                                for suggestion in &spell_data.suggestions {
+                                    let action = CodeAction {
+                                        title: format!("Replace with '{}'", suggestion),
+                                        kind: Some(CodeActionKind::QUICKFIX),
+                                        diagnostics: None,
+                                        edit: Some(WorkspaceEdit {
+                                            changes: Some(vec![(
+                                                params.text_document.uri.clone(),
+                                                vec![TextEdit {
+                                                    range: spell_data.range.clone(),
+                                                    new_text: suggestion.clone(),
+                                                }],
+                                            )]
+                                            .into_iter()
+                                            .collect()),
+                                            document_changes: None,
+                                            change_annotations: None,
+                                        }),
+                                        command: None,
+                                        is_preferred: None,
+                                        disabled: None,
+                                        data: Some(serde_json::to_value(diag_id).unwrap()),
+                                    };
+                                    code_actions.push(action);
+                                }
                             }
                         }
                     }
