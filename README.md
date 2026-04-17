@@ -132,13 +132,13 @@ function hello() {
 
 ## Editor Configuration
 
-### Helix (Primary Editor)
+### Helix 
 
 Add to your `~/.config/helix/languages.toml`:
 
 ```toml
 [language-server.hunspell-lsp]
-command = "/home/konrad/.cargo/bin/hunspell-lsp"
+command = "/home/user/.cargo/bin/hunspell-lsp"
 
 [[language]]
 name = "markdown"
@@ -150,39 +150,8 @@ language-servers = ["hunspell-lsp"]
 ```
 
 **Using smart code actions:**
-- Move cursor to misspelled word → press code action key (typically `space` + `c` in Helix)
+- Move cursor to misspelled word → press code action key (typically `space` + `a` in Helix)
 - Move cursor elsewhere on line → see all misspelled words in line
-
-### VS Code
-
-Add to your `settings.json`:
-
-```json
-{
-    "lsp.hunspell-lsp.command": "/path/to/hunspell-lsp",
-    "lsp.hunspell-lsp.filetypes": ["text", "markdown", "python", "javascript"]
-}
-```
-
-### Neovim
-
-Using `nvim-lspconfig`:
-
-```lua
-require('lspconfig').hunspell_lsp.setup({
-    cmd = {'/path/to/hunspell-lsp'},
-    filetypes = {'text', 'markdown', 'python', 'javascript'},
-})
-```
-
-### Emacs
-
-Using `eglot`:
-
-```elisp
-(add-to-list 'eglot-server-programs
-             '(text-mode . ("/path/to/hunspell-lsp")))
-```
 
 ## Dictionary Location
 
@@ -201,10 +170,6 @@ For example, for American English:
 3. Loads the appropriate Hunspell dictionary
 4. Checks each word in the document
 5. Publishes diagnostics (warnings) for misspelled words back to the editor
-
-## License
-
-This project is provided as-is for educational and practical use.
 
 ## Contributing
 
