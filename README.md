@@ -74,7 +74,7 @@ Specify the language for spell checking by adding a `lang:` pattern anywhere in 
 
 In a Markdown file:
 ```markdown
-lang: de_DE
+<!-- lang: de_DE -->
 
 Dies ist ein deutscher Text.
 
@@ -118,8 +118,8 @@ Possibly misspelled: dksadf. Suggestions: does, dad, sad, dads
 ```
 
 **Code Action Examples:**
-- On word: "Replace 'dksadf' with 'does'"
-- On line: "Replace 'ihc' (2:13): with 'ich'"
+- On word: `"--> 'does'"` (shows only the suggestion)
+- On line: `"'ihc' --> 'ich'"` (shows word and suggestion)
 
 For a JavaScript file:
 ```javascript
@@ -131,6 +131,27 @@ function hello() {
 ```
 
 ## Editor Configuration
+
+### Helix (Primary Editor)
+
+Add to your `~/.config/helix/languages.toml`:
+
+```toml
+[language-server.hunspell-lsp]
+command = "/home/konrad/.cargo/bin/hunspell-lsp"
+
+[[language]]
+name = "markdown"
+language-servers = ["hunspell-lsp"]
+
+[[language]]
+name = "text"
+language-servers = ["hunspell-lsp"]
+```
+
+**Using smart code actions:**
+- Move cursor to misspelled word → press code action key (typically `space` + `c` in Helix)
+- Move cursor elsewhere on line → see all misspelled words in line
 
 ### VS Code
 

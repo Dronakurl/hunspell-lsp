@@ -92,8 +92,10 @@ fn main() {
                                     for suggestion in &spell_data.suggestions {
                                         let action = CodeAction {
                                             title: format!(
-                                                "Replace '{}' with '{}'",
-                                                spell_data.word, suggestion
+                                                // "Replace '{}' with '{}'",
+                                                "--> '{}'",
+                                                // spell_data.word, suggestion
+                                                suggestion
                                             ),
                                             kind: Some(CodeActionKind::QUICKFIX),
                                             diagnostics: None,
@@ -130,10 +132,10 @@ fn main() {
                                     for suggestion in &spell_data.suggestions {
                                         let action = CodeAction {
                                             title: format!(
-                                                "Replace '{}' ({}:{}): with '{}'",
+                                                "'{}' --> '{}'",
                                                 spell_data.word,
-                                                spell_data.range.start.line + 1,
-                                                spell_data.range.start.character + 1,
+                                                // spell_data.range.start.line + 1,
+                                                // spell_data.range.start.character + 1,
                                                 suggestion
                                             ),
                                             kind: Some(CodeActionKind::QUICKFIX),
