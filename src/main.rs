@@ -64,7 +64,8 @@ fn main() {
                         // Check if cursor is on a misspelled word
                         let mut cursor_on_misspelled = false;
                         for (_diag_id, spell_data) in &doc_state.diagnostics {
-                            let ranges_intersect = spell_data.range.start.line <= params.range.end.line
+                            let ranges_intersect = spell_data.range.start.line
+                                <= params.range.end.line
                                 && spell_data.range.end.line >= params.range.start.line
                                 && spell_data.range.start.character <= params.range.end.character
                                 && spell_data.range.end.character >= params.range.start.character;
@@ -78,28 +79,36 @@ fn main() {
                         if cursor_on_misspelled {
                             // Cursor is on a misspelled word - only show suggestions for this word
                             for (diag_id, spell_data) in &doc_state.diagnostics {
-                                let ranges_intersect = spell_data.range.start.line <= params.range.end.line
+                                let ranges_intersect = spell_data.range.start.line
+                                    <= params.range.end.line
                                     && spell_data.range.end.line >= params.range.start.line
-                                    && spell_data.range.start.character <= params.range.end.character
-                                    && spell_data.range.end.character >= params.range.start.character;
+                                    && spell_data.range.start.character
+                                        <= params.range.end.character
+                                    && spell_data.range.end.character
+                                        >= params.range.start.character;
 
                                 if ranges_intersect {
                                     // Create code actions for each suggestion
                                     for suggestion in &spell_data.suggestions {
                                         let action = CodeAction {
-                                            title: format!("Replace '{}' with '{}'", spell_data.word, suggestion),
+                                            title: format!(
+                                                "Replace '{}' with '{}'",
+                                                spell_data.word, suggestion
+                                            ),
                                             kind: Some(CodeActionKind::QUICKFIX),
                                             diagnostics: None,
                                             edit: Some(WorkspaceEdit {
-                                                changes: Some(vec![(
-                                                    params.text_document.uri.clone(),
-                                                    vec![TextEdit {
-                                                        range: spell_data.range.clone(),
-                                                        new_text: suggestion.clone(),
-                                                    }],
-                                                )]
-                                                .into_iter()
-                                                .collect()),
+                                                changes: Some(
+                                                    vec![(
+                                                        params.text_document.uri.clone(),
+                                                        vec![TextEdit {
+                                                            range: spell_data.range.clone(),
+                                                            new_text: suggestion.clone(),
+                                                        }],
+                                                    )]
+                                                    .into_iter()
+                                                    .collect(),
+                                                ),
                                                 document_changes: None,
                                                 change_annotations: None,
                                             }),
@@ -120,19 +129,27 @@ fn main() {
                                     // Create code actions for each suggestion
                                     for suggestion in &spell_data.suggestions {
                                         let action = CodeAction {
-                                            title: format!("Replace '{}' ({}:{}): with '{}'", spell_data.word, spell_data.range.start.line + 1, spell_data.range.start.character + 1, suggestion),
+                                            title: format!(
+                                                "Replace '{}' ({}:{}): with '{}'",
+                                                spell_data.word,
+                                                spell_data.range.start.line + 1,
+                                                spell_data.range.start.character + 1,
+                                                suggestion
+                                            ),
                                             kind: Some(CodeActionKind::QUICKFIX),
                                             diagnostics: None,
                                             edit: Some(WorkspaceEdit {
-                                                changes: Some(vec![(
-                                                    params.text_document.uri.clone(),
-                                                    vec![TextEdit {
-                                                        range: spell_data.range.clone(),
-                                                        new_text: suggestion.clone(),
-                                                    }],
-                                                )]
-                                                .into_iter()
-                                                .collect()),
+                                                changes: Some(
+                                                    vec![(
+                                                        params.text_document.uri.clone(),
+                                                        vec![TextEdit {
+                                                            range: spell_data.range.clone(),
+                                                            new_text: suggestion.clone(),
+                                                        }],
+                                                    )]
+                                                    .into_iter()
+                                                    .collect(),
+                                                ),
                                                 document_changes: None,
                                                 change_annotations: None,
                                             }),
@@ -155,10 +172,7 @@ fn main() {
                         error: None,
                     };
 
-                    connection
-                        .sender
-                        .send(Message::Response(response))
-                        .unwrap();
+                    connection.sender.send(Message::Response(response)).unwrap();
                 }
             }
 
@@ -167,7 +181,8 @@ fn main() {
                     || notif.method == "textDocument/didChange"
                 {
                     let params = if notif.method == "textDocument/didOpen" {
-                        let open: DidOpenTextDocumentParams = serde_json::from_value(notif.params).unwrap();
+                        let open: DidOpenTextDocumentParams =
+                            serde_json::from_value(notif.params).unwrap();
                         DidChangeTextDocumentParams {
                             text_document: VersionedTextDocumentIdentifier {
                                 uri: open.text_document.uri.clone(),
@@ -228,7 +243,7 @@ fn main() {
                                     let message = if suggestions.is_empty() {
                                         format!("No suggestions for: {}", clean)
                                     } else {
-                                        format!("Possibly misspelled: {}. Suggestions: {}", clean, suggestions.join(", "))
+                                        format!("Typo: {}", suggestions.join(", "))
                                     };
 
                                     diagnostics.push(Diagnostic {
