@@ -29,11 +29,28 @@ sudo apt install libhunspell-dev
 sudo apt install hunspell-en-us hunspell-de-de-frami hunspell-fr-fr hunspell-nl
 ```
 
+**Arch Linux:**
+```bash
+sudo pacman -S hunspell hunspell-en-us hunspell-de hunspell-fr hunspell-nl
+```
+
 #### Dictionary Encoding
 
-This LSP uses the modern `hunspell-rs` library which properly handles UTF-8 encoding out of the box. Most system dictionaries work correctly without any manual conversion.
+Some Hunspell dictionaries (particularly German, French, and Dutch) may be distributed in ISO-8859-1 encoding. While the modern `hunspell-rs` library handles UTF-8 properly, you may need to convert dictionaries if you see encoding issues.
 
-If you encounter encoding issues with specific dictionaries, you may need to convert them from ISO-8859-1 to UTF-8, but this is rarely necessary with modern dictionary packages.
+**If you encounter encoding problems:**
+
+```bash
+# Convert German dictionaries from ISO-8859-1 to UTF-8
+iconv -f ISO-8859-1 -t UTF-8 /usr/share/hunspell/de_DE_frami.aff > /tmp/de_DE_frami.aff
+iconv -f ISO-8859-1 -t UTF-8 /usr/share/hunspell/de_DE_frami.dic > /tmp/de_DE_frami.dic
+sudo cp /tmp/de_DE_frami.* /usr/share/hunspell/
+```
+
+**If you need to restore original dictionaries:**
+```bash
+sudo apt install --reinstall hunspell-de-de-frami hunspell-fr hunspell-nl
+```
 
 ### Build
 
