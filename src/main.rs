@@ -220,8 +220,10 @@ fn main() {
                                 let clean = word.trim_matches(|c: char| !c.is_alphabetic());
                                 if !clean.is_empty() && dict.check(clean) != CheckResult::FoundInDictionary {
                                     let suggestions = dict.suggest(clean);
-                                    let word_start = mat.start();
-                                    let word_end = word_start + clean.len();
+
+                                    // Convert byte positions to character positions for UTF-8 support
+                                    let word_start = line[..mat.start()].chars().count();
+                                    let word_end = word_start + clean.chars().count();
 
                                     let diag_id = format!("{}:{}:{}", uri, line_idx, word_start);
 
