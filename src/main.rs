@@ -1,4 +1,5 @@
 use hunspell_lsp::{extract_lang, load_dict};
+use hunspell_rs::CheckResult;
 use lsp_server::{Connection, Message, Notification, Response};
 use lsp_types::*;
 use regex::Regex;
@@ -217,7 +218,7 @@ fn main() {
                             for mat in word_re.find_iter(&line) {
                                 let word = mat.as_str();
                                 let clean = word.trim_matches(|c: char| !c.is_alphabetic());
-                                if !clean.is_empty() && !dict.check(clean) {
+                                if !clean.is_empty() && dict.check(clean) != CheckResult::FoundInDictionary {
                                     let suggestions = dict.suggest(clean);
                                     let word_start = mat.start();
                                     let word_end = word_start + clean.len();

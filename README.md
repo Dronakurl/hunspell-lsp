@@ -29,46 +29,11 @@ sudo apt install libhunspell-dev
 sudo apt install hunspell-en-us hunspell-de-de-frami hunspell-fr-fr hunspell-nl
 ```
 
-**Fedora/RHEL:**
-```bash
-sudo dnf install hunspell-devel hunspell-en hunspell-de hunspell-fr hunspell-nl
-```
+#### Dictionary Encoding
 
-**Arch Linux:**
-```bash
-sudo pacman -S hunspell hunspell-en-us hunspell-de hunspell-fr hunspell-nl
-```
+This LSP uses the modern `hunspell-rs` library which properly handles UTF-8 encoding out of the box. Most system dictionaries work correctly without any manual conversion.
 
-#### Important: Dictionary Encoding
-
-Some Hunspell dictionaries (particularly German, French, and Dutch) are distributed in ISO-8859-1 encoding but need to be converted to UTF-8 for proper use with hunspell-lsp.
-
-**To fix encoding issues:**
-
-```bash
-# Convert German dictionaries from ISO-8859-1 to UTF-8
-iconv -f ISO-8859-1 -t UTF-8 /usr/share/hunspell/de_DE_frami.dic | sudo tee /usr/share/hunspell/de_DE_frami.dic > /dev/null
-iconv -f ISO-8859-1 -t UTF-8 /usr/share/hunspell/de_DE_frami.aff | sed 's/^SET ISO8859-1/SET UTF-8/' | sudo tee /usr/share/hunspell/de_DE_frami.aff > /dev/null
-
-# Convert Austrian and Swiss variants if needed
-for lang in de_AT de_CH; do
-    iconv -f ISO-8859-1 -t UTF-8 /usr/share/hunspell/${lang}_frami.dic | sudo tee /usr/share/hunspell/${lang}_frami.dic > /dev/null
-    iconv -f ISO-8859-1 -t UTF-8 /usr/share/hunspell/${lang}_frami.aff | sed 's/^SET ISO8859-1/SET UTF-8/' | sudo tee /usr/share/hunspell/${lang}_frami.aff > /dev/null
-done
-
-# Convert French dictionary if needed
-iconv -f ISO-8859-1 -t UTF-8 /usr/share/hunspell/fr.dic | sudo tee /usr/share/hunspell/fr.dic > /dev/null
-iconv -f ISO-8859-1 -t UTF-8 /usr/share/hunspell/fr.aff | sudo tee /usr/share/hunspell/fr.aff > /dev/null
-
-# Convert Dutch dictionary if needed
-iconv -f ISO-8859-1 -t UTF-8 /usr/share/hunspell/nl.dic | sudo tee /usr/share/hunspell/nl.dic > /dev/null
-iconv -f ISO-8859-1 -t UTF-8 /usr/share/hunspell/nl.aff | sudo tee /usr/share/hunspell/nl.aff > /dev/null
-```
-
-**If you need to restore original dictionaries:**
-```bash
-sudo apt install --reinstall hunspell-de-de-frami hunspell-fr hunspell-nl
-```
+If you encounter encoding issues with specific dictionaries, you may need to convert them from ISO-8859-1 to UTF-8, but this is rarely necessary with modern dictionary packages.
 
 ### Build
 

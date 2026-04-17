@@ -1,4 +1,4 @@
-use hunspell::Hunspell;
+use hunspell_rs::Hunspell;
 use regex::Regex;
 
 /// Extracts language specification from text comments or plain text.
@@ -335,5 +335,53 @@ mod tests {
     fn test_extract_lang_html_before_hash() {
         let text = "<!-- lang: en_US -->\n# lang: de_DE\nSome content";
         assert_eq!(extract_lang(text), Some("en_US".to_string()));
+    }
+}
+
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    use hunspell_rs::CheckResult;
+
+    #[test]
+    fn test_german_encoding() {
+        let result = std::panic::catch_unwind(|| {
+            Hunspell::new("/usr/share/hunspell/de_DE_frami.aff", "/usr/share/hunspell/de_DE_frami.dic")
+        });
+
+        assert!(result.is_ok(), "Failed to create Hunspell instance: {:?}", result.err());
+
+        let dict = result.unwrap();
+
+        // Test common German words with umlauts
+        let test_words = vec![
+            "möchte",   // would like
+            "Götter",   // gods
+            "für",      // for
+            "über",     // over
+            "Äpfel",    // apples (capitalized)
+        ];
+
+        for word in test_words {
+            let result = dict.check(word);
+            println!("Testing '{}': {:?}", word, result);
+            assert_eq!(result, CheckResult::FoundInDictionary, "Word '{}' should be valid", word);
+        }
+    }
+
+    #[test]
+    fn test_german_suggestions() {
+        let dict = Hunspell::new("/usr/share/hunspell/de_DE_frami.aff", "/usr/share/hunspell/de_DE_frami.dic");
+
+        // Test that German umlaut words are recognized correctly
+        assert_eq!(dict.check("möchte"), CheckResult::FoundInDictionary, "Word 'möchte' should be valid");
+        assert_eq!(dict.check("Götter"), CheckResult::FoundInDictionary, "Word 'Götter' should be valid");
+        assert_eq!(dict.check("für"), CheckResult::FoundInDictionary, "Word 'für' should be valid");
+        assert_eq!(dict.check("über"), CheckResult::FoundInDictionary, "Word 'über' should be valid");
+
+        // Test suggestions for misspelled words
+        let suggestions = dict.suggest("mochte");
+        println!("Suggestions for 'mochte': {:?}", suggestions);
+        assert!(!suggestions.is_empty(), "Should have suggestions for 'mochte'");
     }
 }
