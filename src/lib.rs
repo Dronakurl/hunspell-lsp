@@ -59,16 +59,20 @@ pub fn extract_lang(text: &str) -> Option<String> {
 /// # Returns
 ///
 /// * `Some(Hunspell)` - If dictionary files are found and loaded successfully
-/// * `None` - If dictionary files are not found
+/// * `None` - If dictionary files are not found or cannot be loaded
 pub fn load_dict(lang: &str) -> Option<Hunspell> {
     let base = format!("/usr/share/hunspell/{}", lang);
     let aff = format!("{}.aff", base);
     let dic = format!("{}.dic", base);
-    if std::path::Path::new(&aff).exists() {
-        Some(Hunspell::new(&aff, &dic))
-    } else {
-        None
+
+    if !std::path::Path::new(&aff).exists() || !std::path::Path::new(&dic).exists() {
+        return None;
     }
+
+    // Try to load the dictionary, catching any panics from encoding issues
+    std::panic::catch_unwind(|| {
+        Hunspell::new(&aff, &dic)
+    }).ok()
 }
 
 #[cfg(test)]
