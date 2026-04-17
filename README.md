@@ -15,25 +15,7 @@ A Language Server Protocol (LSP) implementation that provides spell checking usi
 ### Prerequisites
 
 - Rust toolchain (2024 edition or later)
-- Hunspell library and development headers
-- Hunspell dictionaries (typically installed in `/usr/share/hunspell/`)
-
-### Install Dependencies
-
-On Debian/Ubuntu:
-```bash
-sudo apt-get install build-essential libhunspell-dev hunspell
-```
-
-On Fedora/RHEL:
-```bash
-sudo dnf install hunspell-devel hunspell
-```
-
-On Arch Linux:
-```bash
-sudo pacman -S hunspell
-```
+- [Hunspell](https://github.com/hunspell/hunspell) library and development headers
 
 ### Build
 
