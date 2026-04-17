@@ -57,27 +57,44 @@ The LSP server communicates via stdin/stdout. To use it, you need to configure y
 
 Specify the language for spell checking by adding a `lang:` pattern anywhere in your document:
 
-**Supported formats:**
-- **Plain text**: `lang: en_US` (works anywhere in the document)
-- `# lang: en_US` (shell-style)
-- `// lang: en_US` (C-style)
-- `<!-- lang: en_US -->` (HTML/Markdown)
-- `; lang: en_US` (INI-style)
-- `% lang: en_US` (LaTeX/TeX-style)
+**Format:** `lang: language_code`
 
-**Rules:**
-- The first `lang:` pattern in the document is used
-- Language can be specified in comments or plain text
-- If no language is specified, it defaults to `en_US`
+**Examples:**
+- `lang: en_US` (American English)
+- `lang: de_DE` (German)
+- `lang: fr_FR` (French)
+- `lang: es_ES` (Spanish)
 
-### Example
+**How it works:**
+- Place `lang: xx_YY` anywhere in your document (comments or plain text)
+- The first `lang:` pattern found is used
+- If no language is specified, defaults to `en_US`
 
-For a Python file:
+**Example usage:**
+
+In a Markdown file:
+```markdown
+lang: de_DE
+
+Dies ist ein deutscher Text.
+
+lang: en_US
+
+This is English text.
+```
+
+In a Python file:
 ```python
 # lang: en_GB
 
 def hello_world():
-    print("Hello World")  # Any misspellings will be highlighted
+    print("Hello World")
+```
+
+In plain text:
+```text
+lang: de_DE
+Dieser Text wird auf Deutsch geprüft.
 ```
 
 ### Code Actions
