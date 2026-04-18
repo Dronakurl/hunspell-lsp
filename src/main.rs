@@ -45,14 +45,8 @@ fn main() {
     let mut documents: HashMap<String, DocumentState> = HashMap::new();
     let mut shutdown_requested = false;
 
-    loop {
-        let msg = match connection.receiver.recv() {
-            Ok(msg) => msg,
-            Err(_) => {
-                // Connection closed, exit gracefully
-                break;
-            }
-        };
+    // Use while let to be more tolerant of transient channel errors
+    while let Ok(msg) = connection.receiver.recv() {
 
         match msg {
             Message::Request(req) => {
