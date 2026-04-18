@@ -43,17 +43,57 @@ fn main() {
         .expect("init failed");
 
     let mut documents: HashMap<String, DocumentState> = HashMap::new();
+    let mut shutdown_requested = false;
 
-    while let Ok(msg) = connection.receiver.recv() {
+    loop {
+        let msg = match connection.receiver.recv() {
+            Ok(msg) => msg,
+            Err(_) => {
+                // Connection closed, exit gracefully
+                break;
+            }
+        };
+
         match msg {
             Message::Request(req) => {
                 if connection.handle_shutdown(&req).unwrap() {
-                    break;
+                    shutdown_requested = true;
+                    continue;
+                }
+
+                if shutdown_requested {
+                    // Reject all other requests after shutdown
+                    let response = Response {
+                        id: req.id,
+                        result: None,
+                        error: Some(lsp_server::ResponseError {
+                            code: lsp_server::ErrorCode::ServerNotInitialized as i32,
+                            message: "Server is shutting down".to_string(),
+                            data: None,
+                        }),
+                    };
+                    let _ = connection.sender.send(Message::Response(response));
+                    continue;
                 }
 
                 // Handle code action requests
                 if req.method == "textDocument/codeAction" {
-                    let params: CodeActionParams = serde_json::from_value(req.params).unwrap();
+                    let params: CodeActionParams = match serde_json::from_value(req.params) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            let response = Response {
+                                id: req.id,
+                                result: None,
+                                error: Some(lsp_server::ResponseError {
+                                    code: lsp_server::ErrorCode::InvalidRequest as i32,
+                                    message: format!("Failed to parse CodeActionParams: {}", e),
+                                    data: None,
+                                }),
+                            };
+                            let _ = connection.sender.send(Message::Response(response));
+                            continue;
+                        }
+                    };
                     let uri = params.text_document.uri.to_string();
 
                     let mut code_actions = vec![];
@@ -175,12 +215,31 @@ fn main() {
                         error: None,
                     };
 
-                    connection.sender.send(Message::Response(response)).unwrap();
+                    let _ = connection.sender.send(Message::Response(response));
+                } else {
+                    // Respond to unsupported requests with MethodNotFound error
+                    let response = Response {
+                        id: req.id,
+                        result: None,
+                        error: Some(lsp_server::ResponseError {
+                            code: lsp_server::ErrorCode::MethodNotFound as i32,
+                            message: format!("Method '{}' not supported", req.method),
+                            data: None,
+                        }),
+                    };
+                    let _ = connection.sender.send(Message::Response(response));
                 }
             }
 
             Message::Notification(notif) => {
-                if notif.method == "textDocument/didOpen"
+                if notif.method == "exit" {
+                    if shutdown_requested {
+                        break;
+                    } else {
+                        // Exit notification without shutdown request - exit with error
+                        std::process::exit(1);
+                    }
+                } else if notif.method == "textDocument/didOpen"
                     || notif.method == "textDocument/didChange"
                 {
                     let params = if notif.method == "textDocument/didOpen" {
@@ -280,13 +339,12 @@ fn main() {
                         version: None,
                     };
 
-                    connection
+                    let _ = connection
                         .sender
                         .send(Message::Notification(Notification {
                             method: "textDocument/publishDiagnostics".into(),
                             params: serde_json::to_value(params).unwrap(),
-                        }))
-                        .unwrap();
+                        }));
                 }
             }
 
@@ -294,5 +352,7 @@ fn main() {
         }
     }
 
-    io_threads.join().unwrap();
+    // Drop connection before joining threads to avoid blocking
+    drop(connection);
+    let _ = io_threads.join();
 }
