@@ -1,6 +1,109 @@
 use hunspell_rs::Hunspell;
 use regex::Regex;
 
+/// Checks if a word should be ignored during spell checking based on heuristics.
+///
+/// This function provides an extensible system for avoiding false positives
+/// by identifying words that match certain patterns or criteria.
+///
+/// # Arguments
+///
+/// * `word` - The word to check
+/// * `line_context` - The full line containing the word (for context-aware heuristics)
+///
+/// # Returns
+///
+/// * `true` - If the word should be ignored (not spell checked)
+/// * `false` - If the word should be spell checked normally
+///
+/// # Examples
+///
+/// ```
+/// use hunspell_lsp::should_ignore_word;
+///
+/// // Language codes in lang: patterns are ignored
+/// assert!(should_ignore_word("en_US", "lang: en_US"));
+/// assert!(should_ignore_word("de_DE", "lang: de_DE"));
+///
+/// // Regular words are not ignored
+/// assert!(!should_ignore_word("hello", "hello world"));
+/// ```
+pub fn should_ignore_word(word: &str, line_context: &str) -> bool {
+    // Define heuristic patterns that should be ignored
+    let ignore_heuristics: Vec<Box<dyn Fn(&str, &str) -> bool>> = vec![
+        // 1. Language codes in lang: specifications (e.g., "en_US", "de_DE", "fr_FR")
+        // Only ignore language codes that appear to be in a specification context
+        Box::new(|word: &str, context: &str| -> bool {
+            // Match language codes like: xx_YY, xx-YE, de_DE, en_US, zh-CN, etc.
+            let lang_code_pattern = Regex::new(r"^[a-z]{2}[_-][A-Z]{2,3}$").unwrap();
+            if !lang_code_pattern.is_match(word) {
+                return false;
+            }
+
+            // Only ignore if context suggests it's a language specification
+            // Check if the line looks like a language specification
+            let lang_spec_pattern = Regex::new(r"(?:lang|language):\s*([a-zA-Z_\-]+)|<!--\s*lang:\s*([a-zA-Z_\-]+)|#\s*lang:\s*([a-zA-Z_\-]+)").unwrap();
+            if let Some(caps) = lang_spec_pattern.captures(context) {
+                // Check if any captured group matches our word
+                for i in 1..4 {
+                    if let Some(matched) = caps.get(i) {
+                        if matched.as_str() == word {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            false
+        }),
+
+        // 2. Words in lang: specification lines (context-aware)
+        Box::new(|word: &str, context: &str| -> bool {
+            // Only ignore if the line is primarily a language specification
+            // Pattern: "lang: xx_YY" or "language: xx_YY" (not embedded in sentences)
+            let lang_spec_pattern = Regex::new(r"^\s*(?:lang|language):\s*([a-zA-Z_\-]+)\s*(?:-->|$|\n)").unwrap();
+            if let Some(caps) = lang_spec_pattern.captures(context) {
+                if let Some(lang_code) = caps.get(1) {
+                    if word == lang_code.as_str() {
+                        return true;
+                    }
+                }
+            }
+            false
+        }),
+
+        // 3. File extensions and technical identifiers
+        Box::new(|word: &str, _context: &str| -> bool {
+            // File extensions like .md, .rs, .toml, etc.
+            if word.starts_with('.') && word.len() <= 10 {
+                return true;
+            }
+            // Common technical patterns
+            let tech_patterns = vec![
+                r"^[a-z_]+_[a-z_]+$",  // snake_case variables (likely)
+                r"^[A-Z_]+$",           // ALL_CAPS constants
+            ];
+            tech_patterns.iter().any(|pattern| {
+                Regex::new(pattern).unwrap().is_match(word)
+            })
+        }),
+
+        // 4. Single letter words that might be initials or abbreviations
+        Box::new(|word: &str, _context: &str| -> bool {
+            word.len() == 1 && word.chars().next().map_or(false, |c| c.is_alphabetic())
+        }),
+    ];
+
+    // Check each heuristic
+    for heuristic in ignore_heuristics {
+        if heuristic(word, line_context) {
+            return true;
+        }
+    }
+
+    false
+}
+
 /// Extracts language specification from text comments or plain text.
 ///
 /// Supports multiple formats:
@@ -78,6 +181,70 @@ pub fn load_dict(lang: &str) -> Option<Hunspell> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_should_ignore_language_codes() {
+        // Test language code pattern matching
+        assert!(should_ignore_word("en_US", "lang: en_US"));
+        assert!(should_ignore_word("de_DE", "lang: de_DE"));
+        assert!(should_ignore_word("fr_FR", "lang: fr_FR"));
+        assert!(should_ignore_word("zh_CN", "lang: zh_CN"));
+        assert!(should_ignore_word("es_ES", "lang: es_ES"));
+
+        // Test with different separators
+        assert!(should_ignore_word("en-US", "lang: en-US"));
+        assert!(should_ignore_word("de-DE", "lang: de-DE"));
+
+        // Test that regular words are not ignored
+        assert!(!should_ignore_word("hello", "hello world"));
+        assert!(!should_ignore_word("world", "hello world"));
+        assert!(!should_ignore_word("testing", "testing code"));
+    }
+
+    #[test]
+    fn test_should_ignore_context_aware() {
+        // Test context-aware language specification (must be proper lang: format)
+        assert!(should_ignore_word("en_US", "lang: en_US"));
+        assert!(should_ignore_word("de_DE", "language: de_DE"));
+        assert!(should_ignore_word("fr_FR", "<!-- lang: fr_FR -->"));
+        assert!(should_ignore_word("en_US", "lang: en_US"));
+
+        // Test that language codes in regular text are NOT ignored
+        assert!(!should_ignore_word("en_US", "I like en_US culture"));
+        assert!(!should_ignore_word("de_DE", "The de_DE region"));
+
+        // Test that lang: specs are recognized even in longer lines
+        assert!(should_ignore_word("en_US", "This is lang: en_US in a sentence"));
+        assert!(should_ignore_word("es_ES", "We use lang: es_ES for Spanish"));
+
+        // Test that language codes without lang: prefix are NOT ignored
+        assert!(!should_ignore_word("es_ES", "We support es_ES and de_DE"));
+    }
+
+    #[test]
+    fn test_should_ignore_technical_patterns() {
+        // Test file extensions
+        assert!(should_ignore_word(".md", "README.md"));
+        assert!(should_ignore_word(".rs", "main.rs"));
+        assert!(should_ignore_word(".toml", "Cargo.toml"));
+
+        // Test single letters
+        assert!(should_ignore_word("a", "a variable"));
+        assert!(should_ignore_word("x", "x coordinate"));
+
+        // Test that normal multi-letter words are not ignored
+        assert!(!should_ignore_word("var", "var variable"));
+        assert!(!should_ignore_word("file", "file.txt"));
+    }
+
+    #[test]
+    fn test_should_ignore_real_words() {
+        // Ensure real words are not ignored
+        assert!(!should_ignore_word("hello", "hello world"));
+        assert!(!should_ignore_word("world", "hello world"));
+        assert!(!should_ignore_word("rust", "rust programming"));
+        assert!(!should_ignore_word("spell", "spell checker"));
+    }
 
     #[test]
     fn test_extract_lang_with_html_comment() {

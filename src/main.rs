@@ -1,4 +1,4 @@
-use hunspell_lsp::{extract_lang, load_dict};
+use hunspell_lsp::{extract_lang, load_dict, should_ignore_word};
 use hunspell_rs::CheckResult;
 use lsp_server::{Connection, Message, Notification, Response};
 use lsp_types::*;
@@ -218,7 +218,7 @@ fn main() {
                             for mat in word_re.find_iter(&line) {
                                 let word = mat.as_str();
                                 let clean = word.trim_matches(|c: char| !c.is_alphabetic());
-                                if !clean.is_empty() && dict.check(clean) != CheckResult::FoundInDictionary {
+                                if !clean.is_empty() && !should_ignore_word(clean, line) && dict.check(clean) != CheckResult::FoundInDictionary {
                                     let suggestions = dict.suggest(clean);
 
                                     // Convert byte positions to character positions for UTF-8 support
