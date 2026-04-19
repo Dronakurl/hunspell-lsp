@@ -273,12 +273,25 @@ fn main() {
 
                     if let Some(dict) = dict {
                         let word_re = Regex::new(r"\b[\w']+\b").unwrap();
+                        let mut suggestion_cache: HashMap<String, Vec<String>> = HashMap::new();
+                        const MAX_DIAGNOSTICS: usize = 1000; // Limit total diagnostics for performance
+                        let mut diag_count = 0;
+
                         for (line_idx, line) in text.lines().enumerate() {
                             for mat in word_re.find_iter(&line) {
                                 let word = mat.as_str();
                                 let clean = word.trim_matches(|c: char| !c.is_alphabetic());
                                 if !clean.is_empty() && !should_ignore_word(clean, line) && dict.check(clean) != CheckResult::FoundInDictionary {
-                                    let suggestions = dict.suggest(clean);
+                                    // Use cached suggestions if available, otherwise get new ones
+                                    let suggestions = if let Some(cached) = suggestion_cache.get(clean) {
+                                        cached.clone()
+                                    } else {
+                                        let sugg = dict.suggest(clean);
+                                        // Limit to 10 suggestions per word for performance
+                                        let limited: Vec<String> = sugg.into_iter().take(10).collect();
+                                        suggestion_cache.insert(clean.to_string(), limited.clone());
+                                        limited
+                                    };
 
                                     // Convert byte positions to character positions for UTF-8 support
                                     let word_start = line[..mat.start()].chars().count();
@@ -326,7 +339,15 @@ fn main() {
                                         data: Some(serde_json::to_value(diag_id).unwrap()),
                                         ..Default::default()
                                     });
+
+                                    diag_count += 1;
+                                    if diag_count >= MAX_DIAGNOSTICS {
+                                        break; // Stop processing after max diagnostics reached
+                                    }
                                 }
+                            }
+                            if diag_count >= MAX_DIAGNOSTICS {
+                                break; // Stop processing lines after max diagnostics reached
                             }
                         }
                     }
