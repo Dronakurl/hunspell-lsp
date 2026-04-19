@@ -112,6 +112,28 @@ pub fn should_ignore_word(word: &str, line_context: &str) -> bool {
         Box::new(|word: &str, _context: &str| -> bool {
             word.len() == 1 && word.chars().next().map_or(false, |c| c.is_alphabetic())
         }),
+
+        // 6. URLs and web addresses
+        Box::new(|word: &str, _context: &str| -> bool {
+            // Check for URL prefixes and schemes
+            let url_patterns = vec![
+                r"^https?://",           // http:// or https://
+                r"^www\.",               // www. prefix
+                r"^ftp://",              // ftp://
+                r"^file://",             // file://
+                r"^[a-z]+://",           // other schemes (mailto:, git://, etc.)
+            ];
+            for pattern in &url_patterns {
+                if Regex::new(pattern).unwrap().is_match(word) {
+                    return true;
+                }
+            }
+
+            // Check for domain patterns (example.com, sub.example.co.uk, etc.)
+            // Must have at least one dot and end with a valid TLD (2+ letters)
+            let domain_pattern = Regex::new(r"^([a-z0-9-]+\.)+[a-z]{2,}").unwrap();
+            domain_pattern.is_match(word)
+        }),
     ];
 
     // Check each heuristic
@@ -503,6 +525,73 @@ mod tests {
         // Test that special characters in language code are handled safely
         let result = load_dict("../etc/passwd");
         assert!(result.is_none()); // Should not load arbitrary files
+    }
+
+    #[test]
+    fn test_should_ignore_urls() {
+        // Test HTTP/HTTPS URLs
+        assert!(should_ignore_word("https://example.com", "Visit https://example.com"));
+        assert!(should_ignore_word("http://localhost:8080", "Check http://localhost:8080"));
+        assert!(should_ignore_word("https://api.github.com", "See https://api.github.com"));
+
+        // Test www prefix
+        assert!(should_ignore_word("www.example.com", "Go to www.example.com"));
+        assert!(should_ignore_word("www.github.com", "Visit www.github.com"));
+
+        // Test FTP URLs
+        assert!(should_ignore_word("ftp://files.example.com", "Download ftp://files.example.com"));
+
+        // Test file URLs
+        assert!(should_ignore_word("file:///home/user/doc", "Open file:///home/user/doc"));
+
+        // Test domain patterns
+        assert!(should_ignore_word("example.com", "Visit example.com"));
+        assert!(should_ignore_word("api.github.com", "Use api.github.com"));
+        assert!(should_ignore_word("docs.example.com", "Check docs.example.com"));
+
+        // Test subdomain patterns
+        assert!(should_ignore_word("sub.example.co.uk", "Visit sub.example.co.uk"));
+        assert!(should_ignore_word("api.v1.example.com", "Use api.v1.example.com"));
+    }
+
+    #[test]
+    fn test_should_ignore_urls_mixed_content() {
+        // Test URLs in sentences with real typos
+        assert!(should_ignore_word("https://example.com", "Visit https://example.com for teh information"));
+        assert!(should_ignore_word("www.example.com", "Go to www.example.com to see teh docs"));
+        assert!(should_ignore_word("example.com", "Check example.com for teh API"));
+
+        // Test that real typos are still caught
+        assert!(!should_ignore_word("teh", "Visit https://example.com for teh information"));
+        assert!(!should_ignore_word("docs", "Go to www.example.com to see teh docs"));
+    }
+
+    #[test]
+    fn test_should_not_ignore_non_urls() {
+        // Test that regular words are not ignored
+        assert!(!should_ignore_word("hello", "hello world"));
+        assert!(!should_ignore_word("world", "hello world"));
+        assert!(!should_ignore_word("example", "example case"));
+
+        // Test that incomplete domains are checked
+        assert!(!should_ignore_word("example", "This is an example"));
+        assert!(!should_ignore_word("com", "Visit the com domain"));
+
+        // Test words that look like URL parts but aren't
+        assert!(!should_ignore_word("the", "the quick brown"));
+        assert!(!should_ignore_word("and", "and then"));
+    }
+
+    #[test]
+    fn test_should_ignore_various_url_schemes() {
+        // Test different URL schemes
+        assert!(should_ignore_word("mailto://test@example.com", "Email mailto://test@example.com"));
+        assert!(should_ignore_word("git://github.com/user/repo", "Clone git://github.com/user/repo"));
+        assert!(should_ignore_word("ssh://user@host.com", "Connect ssh://user@host.com"));
+
+        // Test URLs with parameters
+        assert!(should_ignore_word("https://example.com?page=1", "Visit https://example.com?page=1"));
+        assert!(should_ignore_word("http://localhost:8080?id=123", "Check http://localhost:8080?id=123"));
     }
 
     #[test]
