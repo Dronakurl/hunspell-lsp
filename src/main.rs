@@ -1,7 +1,10 @@
 mod config;
 mod dictionary_io;
+mod harper_client;
+mod harper_integration;
 
 use config::{get_user_dict_path, get_workspace_dict_path};
+use hunspell_lsp::is_english_lang;
 
 use hunspell_lsp::{extract_lang, load_dict, should_ignore_word};
 use hunspell_rs::CheckResult;
@@ -369,6 +372,20 @@ async fn run_lsp_server() {
                     let text = params.content_changes[0].text.clone();
 
                     let lang = extract_lang(&text).unwrap_or("en_US".into());
+
+                    // Check if we should use Harper for English
+                    if is_english_lang(&lang) && harper_integration::is_harper_available() {
+                        // Route to Harper for enhanced English checking (placeholder)
+                        eprintln!("Routing English document to Harper: {} (full integration coming soon)", lang);
+                        if let Err(e) = handle_harper_check(&connection, &text, &uri).await {
+                            eprintln!("Harper placeholder failed, using Hunspell fallback: {}", e);
+                            // Continue with Hunspell processing below
+                        } else {
+                            // Skip Hunspell processing if Harper succeeded (placeholder always returns Ok)
+                            continue;
+                        }
+                    }
+
                     let dict = load_dict(&lang);
 
                     let mut doc_state = DocumentState::new();
@@ -606,4 +623,18 @@ async fn handle_add_to_dictionary(connection: &Connection, req: lsp_server::Requ
             let _ = connection.sender.send(Message::Response(response));
         }
     }
+}
+
+/// Handle spell checking using Harper language server (placeholder).
+async fn handle_harper_check(
+    _connection: &Connection,
+    _text: &str,
+    uri: &str,
+) -> anyhow::Result<()> {
+    // For now, this is a placeholder that demonstrates the routing logic
+    // The full Harper integration will be implemented in a future update
+    eprintln!("Would use Harper for document: {} (full integration coming soon)", uri);
+
+    // Skip Harper processing for now, return Ok to continue with Hunspell fallback
+    Ok(())
 }

@@ -220,6 +220,38 @@ pub fn load_dict(lang: &str) -> Option<Hunspell> {
     }).ok()
 }
 
+/// Checks if a language code is an English variant.
+///
+/// # Arguments
+///
+/// * `lang` - Language code (e.g., "en_US", "en_GB", "en")
+///
+/// # Returns
+///
+/// * `true` - If the language is an English variant
+/// * `false` - If the language is not English
+///
+/// # Examples
+///
+/// ```
+/// use hunspell_lsp::is_english_lang;
+///
+/// assert!(is_english_lang("en_US"));
+/// assert!(is_english_lang("en_GB"));
+/// assert!(is_english_lang("en"));
+/// assert!(!is_english_lang("de_DE"));
+/// assert!(!is_english_lang("fr_FR"));
+/// ```
+pub fn is_english_lang(lang: &str) -> bool {
+    let lang_lower = lang.to_lowercase();
+    matches!(lang_lower.as_str(),
+        "en_us" | "en_gb" | "en_ca" | "en_au" | "en_nz" |
+        "en_ie" | "en_za" | "en_in" | "en_sg" | "en_my" |
+        "en_ph" | "en" | "en_us-posix" | "en_us.ascii" |
+        "en_gb.ascii" | "en_ca.ascii" | "en_au.ascii"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -525,6 +557,42 @@ mod tests {
         // Test that special characters in language code are handled safely
         let result = load_dict("../etc/passwd");
         assert!(result.is_none()); // Should not load arbitrary files
+    }
+
+    #[test]
+    fn test_is_english_lang() {
+        // Test common English variants
+        assert!(is_english_lang("en_US"));
+        assert!(is_english_lang("en_GB"));
+        assert!(is_english_lang("en_CA"));
+        assert!(is_english_lang("en_AU"));
+        assert!(is_english_lang("en_NZ"));
+        assert!(is_english_lang("en_IE"));
+        assert!(is_english_lang("en_ZA"));
+        assert!(is_english_lang("en_IN"));
+        assert!(is_english_lang("en_SG"));
+        assert!(is_english_lang("en_MY"));
+        assert!(is_english_lang("en_PH"));
+        assert!(is_english_lang("en"));
+
+        // Test case insensitivity
+        assert!(is_english_lang("EN_US"));
+        assert!(is_english_lang("EN_gb"));
+        assert!(is_english_lang("En_Ca"));
+    }
+
+    #[test]
+    fn test_is_not_english_lang() {
+        // Test non-English languages
+        assert!(!is_english_lang("de_DE"));
+        assert!(!is_english_lang("fr_FR"));
+        assert!(!is_english_lang("es_ES"));
+        assert!(!is_english_lang("it_IT"));
+        assert!(!is_english_lang("pt_BR"));
+        assert!(!is_english_lang("zh_CN"));
+        assert!(!is_english_lang("ja_JP"));
+        assert!(!is_english_lang("ko_KR"));
+        assert!(!is_english_lang("ru_RU"));
     }
 
     #[test]
