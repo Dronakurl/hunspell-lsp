@@ -1,3 +1,8 @@
+mod config;
+mod dictionary_io;
+
+use config::{get_user_dict_path, get_workspace_dict_path};
+
 use hunspell_lsp::{extract_lang, load_dict, should_ignore_word};
 use hunspell_rs::CheckResult;
 use lsp_server::{Connection, Message, Notification, Response};
@@ -29,6 +34,16 @@ impl DocumentState {
 }
 
 fn main() {
+    // Create async runtime
+    let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+
+    // Run the LSP server within the async runtime
+    rt.block_on(async {
+        run_lsp_server().await;
+    });
+}
+
+async fn run_lsp_server() {
     let (connection, io_threads) = Connection::stdio();
 
     let server_capabilities = serde_json::to_value(ServerCapabilities {
@@ -162,6 +177,45 @@ fn main() {
                                         };
                                         code_actions.push(action);
                                     }
+
+                                    // Add dictionary actions
+                                    let user_dict_action = CodeAction {
+                                        title: format!("Add '{}' to user dictionary", spell_data.word),
+                                        kind: Some(CodeActionKind::QUICKFIX),
+                                        diagnostics: None,
+                                        edit: None,
+                                        command: Some(Command {
+                                            title: format!("Add '{}' to user dictionary", spell_data.word),
+                                            command: "hunspell-lsp.addToUserDict".to_string(),
+                                            arguments: Some(vec![
+                                                serde_json::to_value(spell_data.word.clone()).unwrap(),
+                                                serde_json::to_value(params.text_document.uri.to_string()).unwrap(),
+                                            ]),
+                                        }),
+                                        is_preferred: None,
+                                        disabled: None,
+                                        data: None,
+                                    };
+                                    code_actions.push(user_dict_action);
+
+                                    let workspace_dict_action = CodeAction {
+                                        title: format!("Add '{}' to workspace dictionary", spell_data.word),
+                                        kind: Some(CodeActionKind::QUICKFIX),
+                                        diagnostics: None,
+                                        edit: None,
+                                        command: Some(Command {
+                                            title: format!("Add '{}' to workspace dictionary", spell_data.word),
+                                            command: "hunspell-lsp.addToWorkspaceDict".to_string(),
+                                            arguments: Some(vec![
+                                                serde_json::to_value(spell_data.word.clone()).unwrap(),
+                                                serde_json::to_value(params.text_document.uri.to_string()).unwrap(),
+                                            ]),
+                                        }),
+                                        is_preferred: None,
+                                        disabled: None,
+                                        data: None,
+                                    };
+                                    code_actions.push(workspace_dict_action);
                                 }
                             }
                         } else {
@@ -203,6 +257,45 @@ fn main() {
                                         };
                                         code_actions.push(action);
                                     }
+
+                                    // Add dictionary actions
+                                    let user_dict_action = CodeAction {
+                                        title: format!("Add '{}' to user dictionary", spell_data.word),
+                                        kind: Some(CodeActionKind::QUICKFIX),
+                                        diagnostics: None,
+                                        edit: None,
+                                        command: Some(Command {
+                                            title: format!("Add '{}' to user dictionary", spell_data.word),
+                                            command: "hunspell-lsp.addToUserDict".to_string(),
+                                            arguments: Some(vec![
+                                                serde_json::to_value(spell_data.word.clone()).unwrap(),
+                                                serde_json::to_value(params.text_document.uri.to_string()).unwrap(),
+                                            ]),
+                                        }),
+                                        is_preferred: None,
+                                        disabled: None,
+                                        data: None,
+                                    };
+                                    code_actions.push(user_dict_action);
+
+                                    let workspace_dict_action = CodeAction {
+                                        title: format!("Add '{}' to workspace dictionary", spell_data.word),
+                                        kind: Some(CodeActionKind::QUICKFIX),
+                                        diagnostics: None,
+                                        edit: None,
+                                        command: Some(Command {
+                                            title: format!("Add '{}' to workspace dictionary", spell_data.word),
+                                            command: "hunspell-lsp.addToWorkspaceDict".to_string(),
+                                            arguments: Some(vec![
+                                                serde_json::to_value(spell_data.word.clone()).unwrap(),
+                                                serde_json::to_value(params.text_document.uri.to_string()).unwrap(),
+                                            ]),
+                                        }),
+                                        is_preferred: None,
+                                        disabled: None,
+                                        data: None,
+                                    };
+                                    code_actions.push(workspace_dict_action);
                                 }
                             }
                         }
@@ -216,6 +309,18 @@ fn main() {
                     };
 
                     let _ = connection.sender.send(Message::Response(response));
+                } else if req.method == "hunspell-lsp.addToUserDict" {
+                    // Handle adding word to user dictionary
+                    handle_add_to_dictionary(&connection, req, &get_user_dict_path()).await;
+                } else if req.method == "hunspell-lsp.addToWorkspaceDict" {
+                    // Handle adding word to workspace dictionary
+                    let workspace_uri = params_for_add_to_dict(&req);
+                    let workspace_path = workspace_uri
+                        .and_then(|uri| config::Config::get_workspace_root(&uri))
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+                    let workspace_dict_path = get_workspace_dict_path(&workspace_path);
+                    handle_add_to_dictionary(&connection, req, &workspace_dict_path).await;
                 } else {
                     // Respond to unsupported requests with MethodNotFound error
                     let response = Response {
@@ -376,4 +481,129 @@ fn main() {
     // Drop connection before joining threads to avoid blocking
     drop(connection);
     let _ = io_threads.join();
+}
+
+/// Extract parameters from a dictionary add command request.
+fn params_for_add_to_dict(req: &lsp_server::Request) -> Option<String> {
+    if let Ok(params) = serde_json::from_value::<serde_json::Value>(req.params.clone()) {
+        if let Some(arr) = params.as_array() {
+            if arr.len() >= 2 {
+                if let Some(uri_str) = arr[1].as_str() {
+                    return Some(uri_str.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Handle adding a word to a dictionary.
+async fn handle_add_to_dictionary(connection: &Connection, req: lsp_server::Request, dict_path: &std::path::Path) {
+    let word_and_uri = match serde_json::from_value::<serde_json::Value>(req.params.clone()) {
+        Ok(params) => params,
+        Err(_) => {
+            let response = Response {
+                id: req.id,
+                result: None,
+                error: Some(lsp_server::ResponseError {
+                    code: lsp_server::ErrorCode::InvalidRequest as i32,
+                    message: "Invalid parameters for addToDictionary".to_string(),
+                    data: None,
+                }),
+            };
+            let _ = connection.sender.send(Message::Response(response));
+            return;
+        }
+    };
+
+    let arr = match word_and_uri.as_array() {
+        Some(arr) if arr.len() >= 2 => arr,
+        _ => {
+            let response = Response {
+                id: req.id,
+                result: None,
+                error: Some(lsp_server::ResponseError {
+                    code: lsp_server::ErrorCode::InvalidRequest as i32,
+                    message: "Expected [word, uri] parameters".to_string(),
+                    data: None,
+                }),
+            };
+            let _ = connection.sender.send(Message::Response(response));
+            return;
+        }
+    };
+
+    let word = match arr[0].as_str() {
+        Some(w) => w,
+        None => {
+            let response = Response {
+                id: req.id,
+                result: None,
+                error: Some(lsp_server::ResponseError {
+                    code: lsp_server::ErrorCode::InvalidRequest as i32,
+                    message: "Word parameter must be a string".to_string(),
+                    data: None,
+                }),
+            };
+            let _ = connection.sender.send(Message::Response(response));
+            return;
+        }
+    };
+
+    let uri = match arr[1].as_str() {
+        Some(u) => u,
+        None => {
+            let response = Response {
+                id: req.id,
+                result: None,
+                error: Some(lsp_server::ResponseError {
+                    code: lsp_server::ErrorCode::InvalidRequest as i32,
+                    message: "URI parameter must be a string".to_string(),
+                    data: None,
+                }),
+            };
+            let _ = connection.sender.send(Message::Response(response));
+            return;
+        }
+    };
+
+    // Add word to dictionary
+    match dictionary_io::add_word_to_dict(dict_path, word).await {
+        Ok(true) => {
+            // Word was added successfully - just send success response
+            // Note: In a full implementation, we would trigger diagnostic refresh here
+            let response = Response {
+                id: req.id,
+                result: Some(serde_json::to_value(true).unwrap()),
+                error: None,
+            };
+            let _ = connection.sender.send(Message::Response(response));
+
+            // Note: In a real implementation, you would trigger a diagnostic refresh here
+            // This would involve re-publishing diagnostics for the affected document
+        }
+        Ok(false) => {
+            // Word already exists in dictionary
+            let response = Response {
+                id: req.id,
+                result: Some(serde_json::to_value(false).unwrap()),
+                error: None,
+            };
+            let _ = connection.sender.send(Message::Response(response));
+        }
+        Err(e) => {
+            // Error adding word
+            eprintln!("Error adding word to dictionary: {}", e);
+            let response = Response {
+                id: req.id,
+                result: None,
+                error: Some(lsp_server::ResponseError {
+                    code: lsp_server::ErrorCode::InternalError as i32,
+                    message: format!("Failed to add word to dictionary: {}", e),
+                    data: None,
+                }),
+            };
+            let _ = connection.sender.send(Message::Response(response));
+        }
+    }
 }
