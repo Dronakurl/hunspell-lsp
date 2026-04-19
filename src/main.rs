@@ -63,6 +63,22 @@ async fn run_lsp_server() {
     let mut documents: HashMap<String, DocumentState> = HashMap::new();
     let mut shutdown_requested = false;
 
+    // Initialize Harper client if available
+    let mut harper_client = if harper_integration::is_harper_available() {
+        match harper_client::HarperClient::new().await {
+            Ok(client) => {
+                eprintln!("Harper language server initialized successfully");
+                Some(client)
+            }
+            Err(e) => {
+                eprintln!("Failed to initialize Harper client: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     loop {
         let msg = match connection.receiver.recv() {
             Ok(msg) => msg,
@@ -373,25 +389,58 @@ async fn run_lsp_server() {
 
                     let lang = extract_lang(&text).unwrap_or("en_US".into());
 
+                    let mut doc_state = DocumentState::new();
+                    doc_state.text = text.clone();
+                    let mut diagnostics = vec![];
+
                     // Check if we should use Harper for English
-                    if is_english_lang(&lang) && harper_integration::is_harper_available() {
-                        // Route to Harper for enhanced English checking (placeholder)
-                        eprintln!("Routing English document to Harper: {} (full integration coming soon)", lang);
-                        if let Err(e) = handle_harper_check(&connection, &text, &uri).await {
-                            eprintln!("Harper placeholder failed, using Hunspell fallback: {}", e);
-                            // Continue with Hunspell processing below
-                        } else {
-                            // Skip Hunspell processing if Harper succeeded (placeholder always returns Ok)
-                            continue;
+                    if is_english_lang(&lang) {
+                        if let Some(ref mut client) = harper_client {
+                            // Route to Harper for enhanced English checking
+                            eprintln!("Routing English document to Harper: {}", lang);
+                            match client.check_text(&text, &uri).await {
+                                Ok(harper_diagnostics) => {
+                                    eprintln!("Harper returned {} diagnostics", harper_diagnostics.len());
+                                    diagnostics = harper_diagnostics;
+
+                                    // Convert Harper diagnostics to our format
+                                    for diag in &diagnostics {
+                                        let diag_id = format!("{}:{}:{}", uri, diag.range.start.line, diag.range.start.character);
+                                        let spell_data = SpellCheckerData {
+                                            uri: uri.clone(),
+                                            word: format!("harper-{}", diag.range.start.line), // Placeholder word
+                                            suggestions: vec![], // Harper doesn't provide suggestions in diagnostics
+                                            range: diag.range.clone(),
+                                        };
+                                        doc_state.diagnostics.insert(diag_id, spell_data);
+                                    }
+
+                                    // Publish diagnostics and skip Hunspell
+                                    let params = PublishDiagnosticsParams {
+                                        uri: params.text_document.uri,
+                                        diagnostics,
+                                        version: None,
+                                    };
+
+                                    let _ = connection
+                                        .sender
+                                        .send(Message::Notification(Notification {
+                                            method: "textDocument/publishDiagnostics".into(),
+                                            params: serde_json::to_value(params).unwrap(),
+                                        }));
+
+                                    documents.insert(uri, doc_state);
+                                    continue;
+                                }
+                                Err(e) => {
+                                    eprintln!("Harper check failed, using Hunspell fallback: {}", e);
+                                    // Continue with Hunspell processing below
+                                }
+                            }
                         }
                     }
 
                     let dict = load_dict(&lang);
-
-                    let mut doc_state = DocumentState::new();
-                    doc_state.text = text.clone();
-
-                    let mut diagnostics = vec![];
 
                     if let Some(dict) = dict {
                         let word_re = Regex::new(r"\b[\w']+\b").unwrap();
@@ -623,18 +672,4 @@ async fn handle_add_to_dictionary(connection: &Connection, req: lsp_server::Requ
             let _ = connection.sender.send(Message::Response(response));
         }
     }
-}
-
-/// Handle spell checking using Harper language server (placeholder).
-async fn handle_harper_check(
-    _connection: &Connection,
-    _text: &str,
-    uri: &str,
-) -> anyhow::Result<()> {
-    // For now, this is a placeholder that demonstrates the routing logic
-    // The full Harper integration will be implemented in a future update
-    eprintln!("Would use Harper for document: {} (full integration coming soon)", uri);
-
-    // Skip Harper processing for now, return Ok to continue with Hunspell fallback
-    Ok(())
 }

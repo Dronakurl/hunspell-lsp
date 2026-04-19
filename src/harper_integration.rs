@@ -3,7 +3,6 @@
 //! This module handles detection of Harper installation and routing of English
 //! language checking requests to Harper when available.
 
-use anyhow::Result;
 use std::process::Command;
 
 /// Checks if Harper language server is available on the system.
