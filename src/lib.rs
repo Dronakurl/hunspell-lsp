@@ -88,7 +88,27 @@ pub fn should_ignore_word(word: &str, line_context: &str) -> bool {
             })
         }),
 
-        // 4. Single letter words that might be initials or abbreviations
+        // 4. Words in backticks (code/technical terms)
+        Box::new(|word: &str, context: &str| -> bool {
+            // Find all backtick-enclosed segments in the line
+            let backtick_pattern = Regex::new(r"`([^`]+)`").unwrap();
+            for caps in backtick_pattern.captures_iter(context) {
+                if let Some(matched) = caps.get(1) {
+                    let backtick_content = matched.as_str();
+                    // Split by whitespace and check for exact word matches
+                    for backtick_word in backtick_content.split_whitespace() {
+                        // Remove any punctuation from the backtick word for comparison
+                        let clean_backtick_word = backtick_word.trim_matches(|c: char| !c.is_alphabetic());
+                        if clean_backtick_word == word {
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        }),
+
+        // 5. Single letter words that might be initials or abbreviations
         Box::new(|word: &str, _context: &str| -> bool {
             word.len() == 1 && word.chars().next().map_or(false, |c| c.is_alphabetic())
         }),
@@ -244,6 +264,53 @@ mod tests {
         assert!(!should_ignore_word("world", "hello world"));
         assert!(!should_ignore_word("rust", "rust programming"));
         assert!(!should_ignore_word("spell", "spell checker"));
+    }
+
+    #[test]
+    fn test_should_ignore_backtick_terms() {
+        // Test that words in backticks are ignored
+        assert!(should_ignore_word("funcname", "use `funcname` to call"));
+        assert!(should_ignore_word("variable", "the `variable` contains"));
+        assert!(should_ignore_word("teh", "misspelled `teh` in backticks"));
+        assert!(should_ignore_word("recieve", "typo `recieve` should be ignored"));
+
+        // Test technical terms in backticks
+        assert!(should_ignore_word("HashMap", "Use `HashMap` for storage"));
+        assert!(should_ignore_word("Vec", "Create a `Vec` of items"));
+
+        // Test that same words outside backticks are NOT ignored
+        assert!(!should_ignore_word("funcname", "use funcname to call"));
+        assert!(!should_ignore_word("variable", "the variable contains"));
+        assert!(!should_ignore_word("HashMap", "Use HashMap for storage"));
+    }
+
+    #[test]
+    fn test_should_ignore_multiple_backticks() {
+        // Test multiple backticked terms in one line
+        assert!(should_ignore_word("first", "`first` and `second` terms"));
+        assert!(should_ignore_word("second", "`first` and `second` terms"));
+
+        // Test that words outside backticks are not ignored in mixed line
+        assert!(!should_ignore_word("and", "`first` and `second` terms"));
+        assert!(!should_ignore_word("terms", "`first` and `second` terms"));
+    }
+
+    #[test]
+    fn test_should_ignore_backticks_with_spaces() {
+        // Test backticks with spaces inside
+        assert!(should_ignore_word("word", "`multi word phrase` here"));
+        assert!(should_ignore_word("multi", "`multi word phrase` here"));
+        assert!(should_ignore_word("phrase", "`multi word phrase` here"));
+
+        // Test normal words not in backticks
+        assert!(!should_ignore_word("here", "`multi word phrase` here"));
+        assert!(!should_ignore_word("test", "`multi word phrase` test"));
+
+        // Test exact match behavior
+        assert!(should_ignore_word("misspelled", "check `misspelled word` here"));
+        assert!(should_ignore_word("word", "check `misspelled word` here"));
+        assert!(!should_ignore_word("check", "check `misspelled word` here"));
+        assert!(!should_ignore_word("here", "check `misspelled word` here"));
     }
 
     #[test]
